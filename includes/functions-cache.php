@@ -31,6 +31,12 @@ function mesi_cache_ensure_dir() {
 function mesi_cache_file_for_path( $path ) {
     $path = trim( $path, '/' );
 
+    if ( str_starts_with( $path, 'index.php/' ) ) {
+        $path = substr( $path, strlen( 'index.php/' ) );
+    } elseif ( $path === 'index.php' ) {
+        $path = '';
+    }
+
     if ( $path === '' ) {
         return MESI_CACHE_DIR . 'index.html';
     }

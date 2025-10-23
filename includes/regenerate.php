@@ -119,13 +119,9 @@ function mesi_cache_generate_all() {
 	    continue;
 	}
 
-	// Clean /index.php/ prefix if present.
-	$path = trim( wp_parse_url( $url, PHP_URL_PATH ), '/' );
-	if ( str_starts_with( $path, 'index.php/' ) ) {
-	    $path = substr( $path, strlen( 'index.php/' ) );
-	}
+        $path = trim( wp_parse_url( $url, PHP_URL_PATH ), '/' );
 
-	// Convert to cache path.
+        // Convert to cache path.
 	$file = mesi_cache_file_for_path( $path );
 
 	// Ensure directory exists.
