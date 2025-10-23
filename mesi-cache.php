@@ -3,7 +3,7 @@
  * Plugin Name: Mesi Cache
  * Plugin URI: https://github.com/andresmesi/wordpress-mesi-cache
  * Description: Ultra-light static HTML caching system for WordPress. Generates static files served directly by Apache for maximum performance.
- * Version: 1.2.2
+ * Version: 1.2.3
  * Author: Mesi
  * Author URI: https://mesi.com.ar
  * License: GPLv2 or later

@@ -12,7 +12,7 @@ function mesi_cache_safe_mkdir( $dir ) {
     global $wp_filesystem;
 
     if ( $wp_filesystem && ! $wp_filesystem->is_dir( $dir ) ) {
-	$wp_filesystem->mkdir( $dir, FS_CHMOD_DIR );
+        $wp_filesystem->mkdir( $dir, FS_CHMOD_DIR );
     }
 
     return $wp_filesystem && $wp_filesystem->is_dir( $dir ) && $wp_filesystem->is_writable( $dir );
@@ -32,7 +32,7 @@ function mesi_cache_file_for_path( $path ) {
     $path = trim( $path, '/' );
 
     if ( $path === '' ) {
-	return MESI_CACHE_DIR . 'index.html';
+        return MESI_CACHE_DIR . 'index.html';
     }
 
     $dir = trailingslashit( MESI_CACHE_DIR . $path );
@@ -53,7 +53,7 @@ function mesi_cache_file_for_home() {
  */
 function mesi_cache_write_file( $file, $html ) {
     if ( ! mesi_cache_ensure_dir() ) {
-	return false;
+        return false;
     }
 
     require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -61,19 +61,35 @@ function mesi_cache_write_file( $file, $html ) {
     global $wp_filesystem;
 
     if ( ! $wp_filesystem ) {
-	return false;
+        return false;
     }
 
-    $temp = $file . '.tmp';
-
-    if ( ! $wp_filesystem->put_contents( $temp, $html, FS_CHMOD_FILE ) ) {
-	return false;
+    $dir = dirname( $file );
+    if ( ! $wp_filesystem->is_dir( $dir ) ) {
+        $wp_filesystem->mkdir( $dir, FS_CHMOD_DIR );
     }
 
-    $wp_filesystem->move( $temp, $file, true );
+    // Escribir a archivo temporal
+    $tmp = $file . '.tmp';
+    if ( ! $wp_filesystem->put_contents( $tmp, $html, FS_CHMOD_FILE ) ) {
+        return false;
+    }
+
+    // Reemplazo seguro
+    if ( $wp_filesystem->exists( $file ) ) {
+        $wp_filesystem->delete( $file );
+    }
+
+    if ( ! $wp_filesystem->move( $tmp, $file, true ) ) {
+        // Fallback si move falla
+        $wp_filesystem->copy( $tmp, $file, true, FS_CHMOD_FILE );
+        $wp_filesystem->delete( $tmp );
+    }
+
     $wp_filesystem->chmod( $file, FS_CHMOD_FILE );
+    clearstatcache( true, $file );
 
-    return true;
+    return $wp_filesystem->exists( $file );
 }
 
 /**
@@ -81,7 +97,7 @@ function mesi_cache_write_file( $file, $html ) {
  */
 function mesi_cache_delete_file( $file ) {
     if ( file_exists( $file ) ) {
-	wp_delete_file( $file );
+        wp_delete_file( $file );
     }
 }
 
@@ -90,7 +106,7 @@ function mesi_cache_delete_file( $file ) {
  */
 function mesi_cache_clear_all() {
     if ( ! is_dir( MESI_CACHE_DIR ) ) {
-	return;
+        return;
     }
 
     require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -98,12 +114,12 @@ function mesi_cache_clear_all() {
     global $wp_filesystem;
 
     if ( $wp_filesystem && $wp_filesystem->is_dir( MESI_CACHE_DIR ) ) {
-	$dirlist = $wp_filesystem->dirlist( MESI_CACHE_DIR, true );
-	if ( is_array( $dirlist ) ) {
-	    foreach ( array_keys( $dirlist ) as $file ) {
-		$wp_filesystem->delete( MESI_CACHE_DIR . $file, true );
-	    }
-	}
+        $dirlist = $wp_filesystem->dirlist( MESI_CACHE_DIR, true );
+        if ( is_array( $dirlist ) ) {
+            foreach ( array_keys( $dirlist ) as $file ) {
+                $wp_filesystem->delete( MESI_CACHE_DIR . $file, true );
+            }
+        }
     }
 }
 
@@ -114,7 +130,7 @@ function mesi_cache_send_headers() {
     $options = get_option( MESI_CACHE_OPTION, array() );
 
     if ( ! empty( $options['add_cache_headers'] ) ) {
-	header( 'Cache-Control: public, max-age=86400' );
+        header( 'Cache-Control: public, max-age=86400' );
     }
 
     header( 'Content-Type: text/html; charset=' . get_option( 'blog_charset' ) );
