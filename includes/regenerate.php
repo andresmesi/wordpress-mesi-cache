@@ -128,19 +128,12 @@ function mesi_cache_generate_all() {
 	// Convert to cache path.
 	$file = mesi_cache_file_for_path( $path );
 
-	// Ensure directory exists.
-	$dir = dirname( $file );
-	if ( ! file_exists( $dir ) ) {
-	    wp_mkdir_p( $dir );
-	}
-
-	// Write using WP_Filesystem.
-	if ( ! $wp_filesystem->put_contents( $file, $body, FS_CHMOD_FILE ) ) {
-	    if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_trigger_error -- Used only in debug mode for developer logging.
-		trigger_error(
-		    '[MESI-Cache] Failed writing ' . esc_html( $file ),
-		    E_USER_NOTICE
+        if ( ! mesi_cache_write_file( $file, $body ) ) {
+            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_trigger_error -- Used only in debug mode for developer logging.
+                trigger_error(
+                    '[MESI-Cache] Failed writing ' . esc_html( $file ),
+                    E_USER_NOTICE
 		);
 	    }
 	    $errors++;
@@ -153,10 +146,13 @@ function mesi_cache_generate_all() {
     $home_url = home_url( '/' );
     $response = wp_remote_get( $home_url );
     if ( ! is_wp_error( $response ) ) {
-	$body = wp_remote_retrieve_body( $response );
-	$file = mesi_cache_file_for_home();
-	$wp_filesystem->put_contents( $file, $body, FS_CHMOD_FILE );
-	$generated++;
+        $body = wp_remote_retrieve_body( $response );
+        $file = mesi_cache_file_for_home();
+        if ( mesi_cache_write_file( $file, $body ) ) {
+            $generated++;
+        } else {
+            $errors++;
+        }
     }
 
     return array(

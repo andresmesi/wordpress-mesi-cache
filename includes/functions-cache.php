@@ -11,11 +11,22 @@ function mesi_cache_safe_mkdir( $dir ) {
     WP_Filesystem();
     global $wp_filesystem;
 
-    if ( $wp_filesystem && ! $wp_filesystem->is_dir( $dir ) ) {
-        $wp_filesystem->mkdir( $dir, FS_CHMOD_DIR );
+    if ( $wp_filesystem ) {
+        if ( ! $wp_filesystem->is_dir( $dir ) ) {
+            $wp_filesystem->mkdir( $dir, FS_CHMOD_DIR );
+        }
+
+        if ( $wp_filesystem->is_dir( $dir ) && $wp_filesystem->is_writable( $dir ) ) {
+            return true;
+        }
     }
 
-    return $wp_filesystem && $wp_filesystem->is_dir( $dir ) && $wp_filesystem->is_writable( $dir );
+    // Fallback to native functions when WP_Filesystem is not available.
+    if ( wp_mkdir_p( $dir ) ) {
+        return is_writable( $dir );
+    }
+
+    return false;
 }
 
 /**
@@ -60,36 +71,64 @@ function mesi_cache_write_file( $file, $html ) {
     WP_Filesystem();
     global $wp_filesystem;
 
-    if ( ! $wp_filesystem ) {
-        return false;
-    }
-
     $dir = dirname( $file );
-    if ( ! $wp_filesystem->is_dir( $dir ) ) {
-        $wp_filesystem->mkdir( $dir, FS_CHMOD_DIR );
+
+    if ( $wp_filesystem ) {
+        if ( ! $wp_filesystem->is_dir( $dir ) ) {
+            $wp_filesystem->mkdir( $dir, FS_CHMOD_DIR );
+        }
+
+        // Escribir a archivo temporal
+        $tmp = $file . '.tmp';
+        if ( ! $wp_filesystem->put_contents( $tmp, $html, FS_CHMOD_FILE ) ) {
+            return false;
+        }
+
+        // Reemplazo seguro
+        if ( $wp_filesystem->exists( $file ) ) {
+            $wp_filesystem->delete( $file );
+        }
+
+        if ( ! $wp_filesystem->move( $tmp, $file, true ) ) {
+            // Fallback si move falla
+            $wp_filesystem->copy( $tmp, $file, true, FS_CHMOD_FILE );
+            $wp_filesystem->delete( $tmp );
+        }
+
+        $wp_filesystem->chmod( $file, FS_CHMOD_FILE );
+        clearstatcache( true, $file );
+
+        return $wp_filesystem->exists( $file );
     }
 
-    // Escribir a archivo temporal
-    $tmp = $file . '.tmp';
-    if ( ! $wp_filesystem->put_contents( $tmp, $html, FS_CHMOD_FILE ) ) {
+    // Fallback sin WP_Filesystem.
+    if ( ! is_dir( $dir ) && ! wp_mkdir_p( $dir ) ) {
         return false;
     }
 
-    // Reemplazo seguro
-    if ( $wp_filesystem->exists( $file ) ) {
-        $wp_filesystem->delete( $file );
+    $tmp = $file . '.tmp';
+    if ( file_put_contents( $tmp, $html ) === false ) {
+        return false;
     }
 
-    if ( ! $wp_filesystem->move( $tmp, $file, true ) ) {
-        // Fallback si move falla
-        $wp_filesystem->copy( $tmp, $file, true, FS_CHMOD_FILE );
-        $wp_filesystem->delete( $tmp );
+    if ( file_exists( $file ) && ! unlink( $file ) ) {
+        // Si no se puede eliminar, intentar sobreescribir igualmente.
     }
 
-    $wp_filesystem->chmod( $file, FS_CHMOD_FILE );
+    if ( ! rename( $tmp, $file ) ) {
+        // Último recurso: copiar y eliminar manualmente.
+        if ( copy( $tmp, $file ) ) {
+            unlink( $tmp );
+        } else {
+            unlink( $tmp );
+            return false;
+        }
+    }
+
+    @chmod( $file, FS_CHMOD_FILE );
     clearstatcache( true, $file );
 
-    return $wp_filesystem->exists( $file );
+    return file_exists( $file );
 }
 
 /**
@@ -119,6 +158,21 @@ function mesi_cache_clear_all() {
             foreach ( array_keys( $dirlist ) as $file ) {
                 $wp_filesystem->delete( MESI_CACHE_DIR . $file, true );
             }
+        }
+        return;
+    }
+
+    // Fallback: borrar usando iteradores nativos.
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator( MESI_CACHE_DIR, FilesystemIterator::SKIP_DOTS ),
+        RecursiveIteratorIterator::CHILD_FIRST
+    );
+
+    foreach ( $iterator as $path ) {
+        if ( $path->isDir() ) {
+            rmdir( $path->getPathname() );
+        } else {
+            unlink( $path->getPathname() );
         }
     }
 }
